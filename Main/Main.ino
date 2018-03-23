@@ -1,6 +1,6 @@
 //Libraries for the pressure, altitude and temperature sensor
 #include <Adafruit_BMP280.h>
-#include <Adafruit_Sensor.h>
+//#include <Adafruit_Sensor.h>
 #include <Wire.h>
 
 //Library for the servo
@@ -21,23 +21,23 @@
 
 //Declaring variables from the GPS Library
 NMEAGPS  gps; // This parses the GPS characters
-gps_fix  fix; // This holds on to the latest values
 
 //Declaring variables for the program
-int           SDChipS = 7;            //Chip select for the SD cacrd reader
-int           LoRaChipS = 10;         //Chip select for the LORA/GPS shield
-int           BMPChipS = 6;           //Chip select for the pressure sensor
-int           pos = 0;                //Position of the servo
-float         lat, lon;               //Cases for latitude and longitude
-float         temp, Pa, alt, altLast; //Temperature, pressure and altitude
-float         Time = 0;               //Times for calculating speed
-float         lastTime;          
-float         Speed;                  //How fast it's going (m/s)
+#define  SDChipS  7            //Chip select for the SD cacrd reader
+#define  LoRaChipS 10          //Chip select for the LORA/GPS shield
+#define  BMPChipS 6            //Chip select for the pressure sensor
+
+int         pos = 0;                //Position of the servo
+int         lat, lon;               //Cases for latitude and longitude
+int         temp, Pa, alt, altLast; //Temperature, pressure and altitude
+int         Time = 0;               //Times for calculating speed
+int         lastTime;          
+int         Speed;                  //How fast it's going (m/s)
 
 
 
 //Declaring variables from the SD card reader Library
-File GPSData, BMPData;
+File data;
 
 //Creating servo object for the release
 Servo releaser;  
@@ -45,7 +45,7 @@ Servo releaser;
 //Setting the Chip select of the pressure sensor to the module
 Adafruit_BMP280 bmp(BMPChipS); // hardware SPI
 
-void digitalSwitch(int S, int B, int L){
+static void digitalSwitch(int S, int B, int L){
   digitalWrite(SDChipS, S);
   digitalWrite(BMPChipS, B);
   digitalWrite(LoRaChipS, L);
@@ -72,71 +72,89 @@ void setup() {
   //Setting the LORA output to LOW and all others to HIGH
   digitalSwitch(1,1,0);
 
+#if 0
   Serial.print("Initializing LORA...");
+#endif
 
   //Initializing the LORA and checking for success
   if (!LoRa.begin(915E6)) {
+#if 0
     Serial.println("Starting LoRa failed!");
+#endif
     //Don't do anything more:
     while(1);
   }
-  
+
+#if 0
   Serial.println("LoRa started");
+#endif
 
   //Setting the SD card reader output to LOW and all others to HIGH
   digitalSwitch(0,1,1);
 
+#if 0
   Serial.print("Initializing SD card...");
+#endif
 
   //Initializing the SD card reader and checking for success
   if (!SD.begin(SDChipS)) {
+#if 0
     Serial.print("Card failed, or not present");
+#endif
     //Don't do anything more:
     while(1);
   }
-  
+
+#if 0
   Serial.println("SD card initialized");
-    
+#endif
+
   //Setting the pressure sensor output to LOW and all others to HIGH
   digitalSwitch(1,0,1);
 
+#if 0
   Serial.print("Initializing BMP280 sensor...");
+#endif
 
   //Initializing the pressure sensor and checking for success
   if (!bmp.begin()) {  
-    Serial.println(F("Could not find a valid BMP280 sensor, check wiring!"));
+#if 0  
+    Serial.println("Could not find a valid BMP280 sensor, check wiring!");
+#endif
     while(1);
   }
 
-  Serial.print("BMP sensor initialized.");
+#if 0
+  Serial.print("BMP sensor initialized.\n");
   Serial.println("");
   Serial.println("All modules are green");
   Serial.println("");
   Serial.println("___________________________________________");
   Serial.println("");
+#endif
 
   delay(2000);
  
 }
 
-void Data(){
+static void Data(){
     //Switching modules to the LORA/GPS shield for usage
     digitalSwitch(1,1,0);
   
     //If a reading can be recieved on the gps
     while (gps.available( gpsPort )) {
     //take the reading
-    fix = gps.read();
+    gps_fix  fix = gps.read();
 
     //Open a transmission to the reciever
     LoRa.beginPacket();
 
     //If there's a fix, save and transmit latitude and longitude
     if (fix.valid.location) {
-      lat = fix.latitude();
-      LoRa.print( fix.latitude(), 6) ;   
-      lon = fix.longitude();
-      LoRa.print( fix.longitude(), 6 );
+      lat = fix.latitudeL();
+      LoRa.print( fix.latitudeL() ) ;   
+      lon = fix.longitudeL();
+      LoRa.print( fix.longitudeL() );
       LoRa.print(alt);
     }
    }
@@ -149,16 +167,22 @@ void Data(){
 
     //Read temperature
     temp = bmp.readTemperature();
+#if 0
     Serial.println(bmp.readTemperature());
+#endif
 
     //Read Altitude
     altLast = alt;
-    alt = bmp.readAltitude(1013.25); //Altitude property should be set to estimate current altitude
+    alt = bmp.readAltitude(1013); //Altitude property should be set to estimate current altitude
+#if 0
     Serial.println(bmp.readAltitude(1013.25));
+#endif
     
     //Read Atmospheric pressure
     Pa = bmp.readPressure();
+#if 0
     Serial.println(bmp.readPressure());
+#endif
 
     //Calculating estimate rise or fall speed
     Speed = (alt-altLast)/(Time-lastTime); //Meters per second
@@ -169,43 +193,46 @@ void Data(){
   
   }
 
-void DataSave(){
+static void DataSave(){
     //Switching modules to the SD card reader being used
     digitalSwitch(0,1,1);
 
 
     //Writing a txt file for use (if the file doesn't exist, it will create it.)
-    GPSData = SD.open("GPSData.txt", FILE_WRITE);
-    BMPData = SD.open("BMPData.txt", FILE_WRITE);
+    data = SD.open("data.txt", FILE_WRITE);
 
     //If the file is a valid one, save all information collected above in a CSV format
-    if(GPSData){
+    if(data){
+#if 0
       Serial.println("Writing to SD Card");
-      GPSData.print(lat, 6);
-      GPSData.print(",");
-      GPSData.print(lon, 6);
-      GPSData.print(",");
-      GPSData.print(alt, 6);
-      GPSData.print(" m");
-      GPSData.println();
-      GPSData.close();
-      BMPData.print(temp);
-      BMPData.print(" *C,");
-      BMPData.print(Pa);
-      BMPData.print("Pa,");
-      BMPData.print(abs(Speed), 3);
-      BMPData.print(" m/s,");
-      BMPData.print(Time);
-      BMPData.print(" seconds");
-      BMPData.println();
-      BMPData.close();
+#endif
+      data.print(lat);
+      data.print(",");
+      data.print(lon);
+      data.print(",");
+      data.print(alt);
+      data.print(" m");
+      data.println();
+      data.close();
+      data.print(temp);
+      data.print(" *C,");
+      data.print(Pa);
+      data.print("Pa,");
+      data.print(abs(Speed));
+      data.print(" m/s,");
+      data.print(Time);
+      data.print(" seconds");
+      data.println();
+      data.close();
     }
+#if 0
     else{
       Serial.println("Error opening file");
     }
+#endif
   }
 
-void drop(){
+static void drop(){
     //Release helium balloon
     for (pos = 0; pos <= 180; pos += 1) { // goes from 0 degrees to 180 degrees
     // in steps of 1 degree
@@ -249,7 +276,7 @@ void loop() {
     }
 
     //If the temperature drops below -37.5 degrees Celsius
-    if(temp <= -37.5){
+    if(temp <= -38){
       drop();
     }
   }
